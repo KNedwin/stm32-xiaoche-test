@@ -32,6 +32,12 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "system_state.h"
+#include "motor.h"
+#include "rc522.h"
+#include "syn6288.h"
+#include "uid_table.h"
+
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
