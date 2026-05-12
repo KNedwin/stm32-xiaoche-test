@@ -162,7 +162,7 @@ uint8_t RC522_CheckCard(uint32_t *uid_out)
 {
     uint8_t recv[16];
     uint8_t recv_len;
-    uint8_t send[2];
+    uint8_t send[7];
 
     /* REQA */
     send[0] = PICC_REQIDL;

@@ -10,7 +10,7 @@ extern UART_HandleTypeDef huart2;
 
 void SYN6288_Init(void)
 {
-    uint8_t init_frame[] = {FRAME_HEAD, 0x00, 0x03, CMD_SPEAK, MUSIC_NONE, 0x00, 0x00};
+    uint8_t init_frame[] = {FRAME_HEAD, 0x00, 0x03, CMD_SPEAK, MUSIC_NONE, 0x00};
     uint8_t checksum = 0;
     for (uint8_t i = 1; i < 5; i++) checksum ^= init_frame[i];
     init_frame[5] = checksum;
