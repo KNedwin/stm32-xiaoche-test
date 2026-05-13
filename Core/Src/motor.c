@@ -1,5 +1,6 @@
 #include "motor.h"
 #include "stm32f1xx_hal.h"
+#include "cmsis_os.h"
 
 static TIM_HandleTypeDef htim3;
 
@@ -55,4 +56,22 @@ void Motor_Stop(void)
     HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_3);
     HAL_GPIO_WritePin(MOTOR_IN1_PORT, MOTOR_IN1_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(MOTOR_IN2_PORT, MOTOR_IN2_PIN, GPIO_PIN_RESET);
+}
+
+void Motor_SoftStart(uint16_t target_speed, uint32_t ramp_ms)
+{
+    if (target_speed > 999) target_speed = 999;
+    if (ramp_ms < 50) ramp_ms = 50;
+
+    uint32_t steps = ramp_ms / 50;
+    uint16_t current = 0;
+
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+
+    for (uint32_t s = 0; s < steps; s++) {
+        current += target_speed / steps;
+        if (current > target_speed) current = target_speed;
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, current);
+        osDelay(50);
+    }
 }

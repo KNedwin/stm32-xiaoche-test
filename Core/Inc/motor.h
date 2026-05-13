@@ -16,5 +16,6 @@ void Motor_SetDirection(uint8_t direction);
 void Motor_SetSpeed(uint16_t speed);
 void Motor_Start(void);
 void Motor_Stop(void);
+void Motor_SoftStart(uint16_t target_speed, uint32_t ramp_ms);
 
 #endif
