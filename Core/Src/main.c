@@ -352,16 +352,14 @@ void Task_RFID_TTS(void const *argument)
                 /* Data complete or Block 1 also empty */
                 uint8_t *data = RFID_GetChineseData();
                 if (data[0] != 0x00) {
-                    /* Filter "一点" brand */
-                    if (!(data[0]==0xD2 && data[1]==0xBB && data[2]==0xB5 && data[3]==0xE3)) {
-                        LED_On();
-                        uint32_t tmo = 5000;
-                        while (SYN6288_IsBusy() && tmo > 0) { osDelay(10); tmo -= 10; }
-                        if (tmo == 0) SYN6288_Init();
+                    LED_On();
+                    uint32_t tmo = 5000;
+                    while (SYN6288_IsBusy() && tmo > 0) { osDelay(10); tmo -= 10; }
+                    if (tmo == 0) SYN6288_Init();
 
-                        uint8_t dlen = (bn > 0) ? (uint8_t)(bn * 16) : 16;
-                        SYN6288_Speak(data, dlen);
-                    }
+                    uint8_t dlen = (bn > 0) ? (uint8_t)(bn * 16) : 16;
+                    SYN6288_Speak(data, dlen);
+
                     RFID_SetCardFlag(CARD_FLAG_LEDLIGHT);
                     led_close_count = 10;
                 } else {
