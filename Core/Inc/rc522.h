@@ -2,6 +2,7 @@
 #define __RC522_H
 
 #include <stdint.h>
+#include "stm32f1xx_hal.h"
 
 #define RC522_SPI         SPI1
 #define RC522_NSS_PIN     GPIO_PIN_4

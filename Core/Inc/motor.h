@@ -2,6 +2,7 @@
 #define __MOTOR_H
 
 #include <stdint.h>
+#include "stm32f1xx_hal.h"
 
 #define MOTOR_IN1_PIN    GPIO_PIN_12
 #define MOTOR_IN1_PORT   GPIOB

@@ -52,6 +52,10 @@ void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
+static uint8_t DebounceSwitch(void);
+void Task_Motor(void const *argument);
+void Task_RFID_TTS(void const *argument);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/

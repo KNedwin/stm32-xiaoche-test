@@ -2,6 +2,7 @@
 #define __SYN6288_H
 
 #include <stdint.h>
+#include "stm32f1xx_hal.h"
 
 #define SYN6288_USART      USART2
 #define SYN6288_BUSY_PIN   GPIO_PIN_1
