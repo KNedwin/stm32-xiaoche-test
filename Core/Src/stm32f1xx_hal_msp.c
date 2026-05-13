@@ -55,7 +55,7 @@
 
 /* USER CODE BEGIN 0 */
 
-SPI_HandleTypeDef hspi1;
+UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE END 0 */
@@ -87,28 +87,25 @@ void HAL_MspInit(void)
 
 /* USER CODE BEGIN 1 */
 
-void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi)
+void HAL_UART_MspInit(UART_HandleTypeDef *huart)
 {
-    if (hspi->Instance == SPI1) {
-        __HAL_RCC_SPI1_CLK_ENABLE();
+    if (huart->Instance == USART1) {
+        __HAL_RCC_USART1_CLK_ENABLE();
         __HAL_RCC_GPIOA_CLK_ENABLE();
 
         GPIO_InitTypeDef gpio = {0};
         gpio.Mode = GPIO_MODE_AF_PP;
         gpio.Speed = GPIO_SPEED_FREQ_HIGH;
 
-        gpio.Pin = GPIO_PIN_5 | GPIO_PIN_7;
+        gpio.Pin = GPIO_PIN_9;
         HAL_GPIO_Init(GPIOA, &gpio);
 
-        gpio.Pin = GPIO_PIN_6;
+        gpio.Pin = GPIO_PIN_10;
         gpio.Mode = GPIO_MODE_INPUT;
         gpio.Pull = GPIO_NOPULL;
         HAL_GPIO_Init(GPIOA, &gpio);
     }
-}
 
-void HAL_UART_MspInit(UART_HandleTypeDef *huart)
-{
     if (huart->Instance == USART2) {
         __HAL_RCC_USART2_CLK_ENABLE();
         __HAL_RCC_GPIOA_CLK_ENABLE();
