@@ -1,0 +1,25 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Flash (ST-LINK)",
+            "type": "shell",
+            "command": "STM32_Programmer_CLI.exe",
+            "args": [
+                "-c", "port=SWD",
+                "-w", "${workspaceFolder}/build/${command:cmake.buildType}/test1.elf",
+                "-v"
+            ],
+            "options": {
+                "env": {
+                    "PATH": "C:/Users/KN/AppData/Local/stm32cube/bundles/programmer/2.22.0+st.1/bin;${env:PATH}"
+                }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
