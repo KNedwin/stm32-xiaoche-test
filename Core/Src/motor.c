@@ -26,6 +26,7 @@ void Motor_Init(void)
     HAL_GPIO_WritePin(MOTOR_IN2_PORT, MOTOR_IN2_PIN, GPIO_PIN_RESET);
 }
 
+/* direction: 0=正向(IN1高/IN2低), 1=反向(IN1低/IN2高) */
 void Motor_SetDirection(uint8_t direction)
 {
     if (direction == 0) {
@@ -37,6 +38,7 @@ void Motor_SetDirection(uint8_t direction)
     }
 }
 
+/* speed: PWM占空比 0~999 (对应0%~100%), 超出自动限制为999 */
 void Motor_SetSpeed(uint16_t speed)
 {
     if (speed > 999) speed = 999;

@@ -2,8 +2,8 @@
 
 SystemState_t system_state = {
     .mode = SYSTEM_MODE_RUN,
-    .motor_direction = 0,
-    .motor_speed = 500,
+    .motor_direction = 0,   /* 转动方向: 0=正向(IN1高/IN2低), 1=反向(IN1低/IN2高) */
+    .motor_speed = 500,     /* PWM占空比: 0~999 (0=停转, 999=全速) */
 };
 
 osMutexId state_mutex_handle;
