@@ -2,6 +2,7 @@
 #define __UID_TABLE_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 typedef struct {
     uint32_t uid;
