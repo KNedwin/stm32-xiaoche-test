@@ -34,7 +34,8 @@ extern "C" {
 
 #include "system_state.h"
 #include "motor.h"
-#include "rc522.h"
+#include "rfid_uart.h"
+#include "led.h"
 #include "syn6288.h"
 #include "uid_table.h"
 

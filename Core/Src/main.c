@@ -61,6 +61,15 @@ void Task_RFID_TTS(void const *argument);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1) {
+        uint8_t byte;
+        HAL_UART_Receive_IT(&huart1, &byte, 1);
+        RFID_UART_RxCallback(byte);
+    }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -93,13 +102,13 @@ int main(void)
   /* Initialize all configured peripherals */
   /* USER CODE BEGIN 2 */
 
-  extern SPI_HandleTypeDef hspi1;
+  extern UART_HandleTypeDef huart1;
   extern UART_HandleTypeDef huart2;
 
-  /* Switch GPIO: PA10 input with pull-up */
+  /* Toggle switch: PA11 input with pull-up */
   __HAL_RCC_GPIOA_CLK_ENABLE();
   GPIO_InitTypeDef gpio_switch = {0};
-  gpio_switch.Pin = GPIO_PIN_10;
+  gpio_switch.Pin = GPIO_PIN_11;
   gpio_switch.Mode = GPIO_MODE_INPUT;
   gpio_switch.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &gpio_switch);
@@ -112,15 +121,6 @@ int main(void)
   gpio_motor.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &gpio_motor);
 
-  /* RC522 NSS(PA4) and RST(PA8) */
-  GPIO_InitTypeDef gpio_rc522 = {0};
-  gpio_rc522.Pin = GPIO_PIN_4 | GPIO_PIN_8;
-  gpio_rc522.Mode = GPIO_MODE_OUTPUT_PP;
-  gpio_rc522.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &gpio_rc522);
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);
-
   /* SYN6288 BUSY(PA1) */
   GPIO_InitTypeDef gpio_busy = {0};
   gpio_busy.Pin = GPIO_PIN_1;
@@ -128,21 +128,7 @@ int main(void)
   gpio_busy.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &gpio_busy);
 
-  /* SPI1 init */
-  hspi1.Instance = SPI1;
-  hspi1.Init.Mode = SPI_MODE_MASTER;
-  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
-  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  HAL_SPI_Init(&hspi1);
-
-  /* USART2 init */
+  /* USART2 init (SYN6288) */
   huart2.Instance = USART2;
   huart2.Init.BaudRate = 9600;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
@@ -153,8 +139,9 @@ int main(void)
   HAL_UART_Init(&huart2);
 
   /* Initialize drivers */
+  LED_Init();
   Motor_Init();
-  RC522_Init();
+  RFID_UART_Init();
   SYN6288_Init();
 
   /* USER CODE END 2 */
@@ -213,28 +200,25 @@ void SystemClock_Config(void)
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
   }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -246,7 +230,7 @@ static uint8_t DebounceSwitch(void)
 {
     uint8_t count = 0;
     for (uint8_t i = 0; i < 3; i++) {
-        if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_10) == GPIO_PIN_RESET) {
+        if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_11) == GPIO_PIN_RESET) {
             count++;
         }
         osDelay(30);
@@ -268,8 +252,7 @@ void Task_Motor(void const *argument)
                 uint8_t dir = SystemState_GetMotorDirection();
                 uint16_t spd = SystemState_GetMotorSpeed();
                 Motor_SetDirection(dir);
-                Motor_SetSpeed(spd);
-                Motor_Start();
+                Motor_SoftStart(spd, 4000);
                 last_mode = SYSTEM_MODE_RUN;
             }
         } else {
@@ -286,41 +269,123 @@ void Task_Motor(void const *argument)
 void Task_RFID_TTS(void const *argument)
 {
     (void)argument;
-    uint32_t current_uid = 0;
+    uint32_t card_wait_ms = 0;
+    uint8_t  resend_count = 0;
+    uint8_t  block_data[16];
+    uint8_t  led_close_count = 0;
 
     for (;;) {
         SystemMode_t mode = SystemState_GetMode();
 
         if (mode == SYSTEM_MODE_INIT) {
-            RC522_HardReset();
-            RC522_Init();
-            SYN6288_Init();
-            current_uid = 0;
+            LED_Off();
+            RFID_SetCardFlag(CARD_FLAG_NONE);
+            RFID_SetChineseBlockNum(0);
+            card_wait_ms = 0;
+            resend_count = 0;
             osDelay(500);
             continue;
         }
 
-        uint32_t uid = 0;
-        if (RC522_CheckCard(&uid)) {
-            if (uid != current_uid) {
-                current_uid = uid;
-                const uid_entry_t *entry = UIDTable_Lookup(uid);
-                if (entry != NULL) {
-                    uint32_t busy_timeout = 5000;
-                    while (SYN6288_IsBusy() && busy_timeout > 0) {
-                        osDelay(10);
-                        busy_timeout -= 10;
-                    }
-                    if (busy_timeout == 0) {
-                        SYN6288_Init();
-                    }
-                    SYN6288_Speak(entry->name_gb2312, entry->name_len);
+        uint8_t flag = RFID_GetCardFlag();
+
+        switch (flag) {
+
+        case CARD_FLAG_NONE:
+            LED_Off();
+            RFID_ClearChineseData();
+            RFID_SetChineseBlockNum(0);
+            card_wait_ms = 0;
+            resend_count = 0;
+            osDelay(10);
+            break;
+
+        case CARD_FLAG_EXIST:
+            RFID_SetChineseBlockNum(0);
+            RFID_SendReadBlock(4);
+            RFID_SetCardFlag(CARD_FLAG_WAIT);
+            card_wait_ms = 0;
+            resend_count = 0;
+            osDelay(1);
+            break;
+
+        case CARD_FLAG_WAIT:
+            card_wait_ms++;
+            if (card_wait_ms >= 20) {
+                card_wait_ms = 0;
+                resend_count++;
+                if (resend_count > 2) {
+                    RFID_SetCardFlag(CARD_FLAG_NONE);
+                } else {
+                    uint8_t blk = 4;
+                    int8_t bn = (int8_t)RFID_GetChineseBlockNum();
+                    if (bn < 0) blk = 1;
+                    else if (bn > 0) blk = 4 + bn;
+                    RFID_SendReadBlock(blk);
                 }
             }
-        } else {
-            current_uid = 0;
+            osDelay(1);
+            break;
+
+        case CARD_FLAG_RESDATA: {
+            RFID_GetBlockData(block_data);
+            int8_t bn = (int8_t)RFID_GetChineseBlockNum();
+
+            if (bn >= 0 && block_data[0] != 0x00) {
+                /* Block has data — append and continue reading */
+                RFID_AppendChineseData(block_data, 16);
+                RFID_SetChineseBlockNum(bn + 1);
+                RFID_SendReadBlock(4 + bn + 1);
+                RFID_SetCardFlag(CARD_FLAG_WAIT);
+                card_wait_ms = 0;
+                resend_count = 0;
+            } else if (bn == 0 && block_data[0] == 0x00) {
+                /* Block 4 empty — fallback to Block 1 */
+                RFID_SetChineseBlockNum(-3);
+                RFID_SendReadBlock(1);
+                RFID_SetCardFlag(CARD_FLAG_WAIT);
+                card_wait_ms = 0;
+                resend_count = 0;
+            } else {
+                /* Data complete or Block 1 also empty */
+                uint8_t *data = RFID_GetChineseData();
+                if (data[0] != 0x00) {
+                    /* Filter "一点" brand */
+                    if (!(data[0]==0xD2 && data[1]==0xBB && data[2]==0xB5 && data[3]==0xE3)) {
+                        LED_On();
+                        uint32_t tmo = 5000;
+                        while (SYN6288_IsBusy() && tmo > 0) { osDelay(10); tmo -= 10; }
+                        if (tmo == 0) SYN6288_Init();
+
+                        uint8_t dlen = (bn > 0) ? (uint8_t)(bn * 16) : 16;
+                        SYN6288_Speak(data, dlen);
+                    }
+                    RFID_SetCardFlag(CARD_FLAG_LEDLIGHT);
+                    led_close_count = 10;
+                } else {
+                    RFID_SetCardFlag(CARD_FLAG_NONE);
+                }
+            }
+            osDelay(1);
+            break;
         }
-        osDelay(200);
+
+        case CARD_FLAG_LEDLIGHT:
+            LED_On();
+            RFID_SendReadCard();
+            if (RFID_GetCardFlag() == CARD_FLAG_LEDLIGHT) {
+                led_close_count--;
+                if (led_close_count == 0) {
+                    RFID_SetCardFlag(CARD_FLAG_NONE);
+                }
+            }
+            osDelay(10);
+            break;
+
+        default:
+            osDelay(10);
+            break;
+        }
     }
 }
 
