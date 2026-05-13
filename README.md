@@ -1,12 +1,14 @@
 # STM32F103 RFID Motor + TTS System
 
-> 基于 STM32F103 + FreeRTOS 的 RFID 刷卡语音播报 + 直流电机控制系统
+> 基于 STM32F103 + FreeRTOS 的 UART RFID 刷卡语音播报 + 直流电机控制系统
 
 ## Overview
 
 STM32F103C8/CB FreeRTOS system with two tasks:
-1. **Motor Control**: PA10 toggle switch (NC=RUN, NO=INIT) controls DC motor via H-bridge
-2. **RFID + TTS**: RC522 reads card UID, looks up GB2312 name, SYN6288 voice broadcast
+1. **Motor Control**: PA11 toggle switch (NC=RUN, NO=INIT) controls DC motor via H-bridge with 4-second soft-start ramp
+2. **RFID + TTS**: UART RFID module reads card block data (GB2312 Chinese text), SYN6288 voice broadcast, LED indicator with delayed off
+
+**Clock:** HSE external 8MHz crystal → PLL 9x → 72MHz SYSCLK
 
 ---
 
@@ -14,18 +16,17 @@ STM32F103C8/CB FreeRTOS system with two tasks:
 
 | Peripheral | Signal | Pin | Mode |
 |---|---|---|---|
-| Toggle Switch | SW_IN | PA10 | GPIO Input, internal pull-up |
+| Toggle Switch | SW_IN | PA11 | GPIO Input, internal pull-up |
 | H-Bridge Motor | IN1 | PB12 | GPIO Push-Pull Output |
 | | IN2 | PB13 | GPIO Push-Pull Output |
 | | PWM | PB0 | TIM3_CH3, AF Push-Pull |
-| RC522 (SPI1) | SCK | PA5 | SPI1_SCK |
-| | MISO | PA6 | SPI1_MISO |
-| | MOSI | PA7 | SPI1_MOSI |
-| | NSS | PA4 | GPIO Output (CS) |
-| | RST | PA8 | GPIO Output (Reset) |
-| SYN6288 (USART2) | TX | PA2 | USART2_TX |
+| UART RFID (USART1) | TX | PA9 | USART1_TX (115200bps) |
+| | RX | PA10 | USART1_RX (115200bps) |
+| SYN6288 (USART2) | TX | PA2 | USART2_TX (9600bps) |
 | | RX | PA3 | USART2_RX |
 | | BUSY | PA1 | GPIO Input |
+| LED Indicator | LED1 | PA8 | GPIO Push-Pull Output (active-low) |
+| | LED2 | PC13 | GPIO Push-Pull Output (active-low) |
 
 No pin conflicts.
 
@@ -37,15 +38,43 @@ No pin conflicts.
 
 | Task | Stack | Priority | Role |
 |---|---|---|---|
-| `Task_Motor` | 128 words | Normal | Read PA10, control motor direction/speed |
-| `Task_RFID_TTS` | 256 words | Normal | RC522 card polling, UID lookup, TTS broadcast |
+| `Task_Motor` | 128 words | Normal | Read PA11, soft-start motor, stop on INIT |
+| `Task_RFID_TTS` | 256 words | Normal | UART RFID state machine, card block reading, TTS broadcast, LED control |
+
+### RFID Card Read State Machine
+
+```
+NONE ──(card detected)──▶ EXIST ──(send ReadBlock)──▶ WAIT
+  ▲                          ▲                            │
+  │                          │                  (response received)
+  │                          │                            ▼
+  │                          ◀──(next block)────── RESDATA
+  │                                                   │
+  │                                        (data complete)
+  │                                                   ▼
+  ◀────────(card left, LED off)────────────── LEDLIGHT
+                                                  LED On + TTS broadcast
+```
+
+- Block 4 is read first (official APP data location)
+- Falls back to Block 1 if Block 4 is empty
+- Cross-block Chinese data assembly (up to 60 bytes / 30 GB2312 characters)
+- Brand filter: cards starting with "一点" are silently ignored
+
+### RFID UART Protocol
+
+Private binary protocol over USART1:
+- Frame: `[0x7F] [escaped payload]` with XOR checksum
+- Baud rate auto-switch: 9600 → 115200 on init
+- Commands: `0x10` ReadCard, `0x11` ReadBlock, `0xAC` SetBaud
+- Interrupt-driven single-byte receive state machine
 
 ### Shared State (mutex protected)
 
 ```c
 typedef enum {
-    SYSTEM_MODE_RUN  = 0,  // PA10 low (NC): normal operation
-    SYSTEM_MODE_INIT = 1,  // PA10 high (NO): stop + reinit
+    SYSTEM_MODE_RUN  = 0,  // PA11 low (NC): normal operation
+    SYSTEM_MODE_INIT = 1,  // PA11 high (NO): stop + reinit
 } SystemMode_t;
 
 typedef struct {
@@ -59,25 +88,12 @@ typedef struct {
 
 ## Configurable Parameters
 
-| Variable | Default | Range | Description |
-|---|---|---|---|
-| `motor_direction` | 0 | 0/1 | 0=forward, 1=reverse |
-| `motor_speed` | 500 | 0~999 | PWM duty cycle |
-| `tts_volume` | 5 | 0~10 | SYN6288 volume level |
-
----
-
-## UID-to-Name Mapping
-
-Edit `Core/Src/uid_table.c` to add card UIDs and their GB2312-encoded Chinese names:
-
-```c
-const uid_entry_t uid_table[] = {
-    // {UID (hex), GB2312 bytes, byte length}
-    // Example: card "Zhang San"
-    // {0x12345678, "\xBF\xA8\xC6\xAC\xD5\xC5\xC8\xFD", 8},
-};
-```
+| Variable | Default | Range | File | Description |
+|---|---|---|---|---|
+| `motor_direction` | 0 | 0/1 | `system_state.c` | 0=forward, 1=reverse |
+| `motor_speed` | 500 | 0~999 | `system_state.c` | PWM duty cycle |
+| `motor_ramp_ms` | 4000 | — | `main.c:Task_Motor` | Soft-start duration |
+| `tts_volume` | 5 | 0~10 | `syn6288.h` | SYN6288 volume level |
 
 ---
 
